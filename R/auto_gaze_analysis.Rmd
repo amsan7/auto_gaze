@@ -1,0 +1,87 @@
+---
+title: "Auto-Gaze Analysis"
+date: "2/20/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
+```
+
+```{r}
+library(cowplot)
+library(here)
+library(magrittr)
+library(tidyverse)
+theme_set(ggthemes::theme_few())
+```
+
+```{r}
+set_here(path = ".", verbose = TRUE)
+```
+
+Read data
+
+```{r}
+d <- read_csv(here("results.csv"))
+```
+
+Select only gaze-relevant data.
+
+```{r}
+d %<>% select(frame:gaze_1_z)
+```
+
+How long is the video?
+
+```{r}
+paste("The input video is", ((max(d$frame, na.rm=t) * 0.033) / 60) %>% round(2), "minutes")
+```
+
+What's the success rate?
+
+```{r}
+paste("Overall sucess rate is:", d %>% summarise(m = mean(success)) %>% pull(m) %>% round(2))
+```
+
+What's the confidence rate?
+
+```{r}
+paste("Overall confidence rate is:", 
+      d %>% 
+        filter(success == 1) %>% 
+        summarise(m = mean(confidence)) %>%
+        pull(m) %>% 
+        round(2))
+```
+
+### Diagnostic plots
+
+```{r}
+y_min <- min(d$gaze_0_y)
+y_max <- max(d$gaze_0_y)
+x_min <- min(d$gaze_0_x)
+x_max <- max(d$gaze_0_x)
+
+x_dim <- d %>% 
+  filter(frame >= 300, frame <= 800, success == 1) %>% 
+  ggplot(aes(x = frame, y = gaze_0_x)) + 
+  geom_line(col = "darkgrey") + 
+  labs(title = "x-coordinates",
+       y = "Gaze Coordinate") + 
+  lims(y = c(x_min, x_max)) + 
+  geom_point(alpha = .3) +
+  coord_flip()
+
+y_dim <- d %>% 
+  filter(frame >= 300, frame <= 800, success == 1) %>% 
+  ggplot(aes(x = frame, y = gaze_0_y)) + 
+  geom_line(col = "darkgrey") + 
+  labs(title = "y-coordinates",
+       y = "Gaze Coordinate") + 
+  lims(y = c(y_min, y_max)) + 
+  geom_point(alpha = .3)
+
+plot_grid(x_dim, y_dim)
+```
+
