@@ -20,7 +20,7 @@ set_here(path = ".", verbose = TRUE)
 
 Sample 500 random samples
 ```{r}
-results <- read_csv("data/results.csv")
+results <- read_csv(here("data/emily/results.csv"))
 candidates <- results %>% 
   sample_n(500) %>%
   mutate(path=paste0("/image-", sprintf("%05d",frame), ".jpg")) %>%
@@ -29,6 +29,6 @@ candidates <- results %>%
 
 Save tibble
 ```{r}
-write_csv(candidates, "data/gold_set_candidates.csv")
+write_csv(candidates, here("data/emily/gold_set_candidates.csv"))
 ```
 
