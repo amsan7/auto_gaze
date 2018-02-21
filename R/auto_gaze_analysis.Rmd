@@ -23,7 +23,7 @@ set_here(path = ".", verbose = TRUE)
 Read data
 
 ```{r}
-d <- read_csv(here("results.csv"))
+d <- read_csv(here("data/results.csv"))
 ```
 
 Select only gaze-relevant data.
