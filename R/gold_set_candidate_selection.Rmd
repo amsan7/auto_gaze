@@ -1,0 +1,34 @@
+---
+title: "Sample 500 frame candidates for gold set evaluation"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
+```
+
+```{r}
+library(here)
+library(magrittr)
+library(tidyverse)
+theme_set(ggthemes::theme_few())
+```
+
+```{r}
+set_here(path = ".", verbose = TRUE)
+```
+
+Sample 500 random samples
+```{r}
+results <- read_csv("data/results.csv")
+candidates <- results %>% 
+  sample_n(500) %>%
+  mutate(path=paste0("/image-", sprintf("%05d",frame), ".jpg")) %>%
+  arrange(frame)
+```
+
+Save tibble
+```{r}
+write_csv(candidates, "data/gold_set_candidates.csv")
+```
+
