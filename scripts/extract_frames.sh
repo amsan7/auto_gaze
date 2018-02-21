@@ -1,7 +1,8 @@
 #!/bin/sh
 
-vid=$SCRATCH/auto_gaze/raw_video/30054.f.25.V2-.mov
-out_dir=$PI_HOME/auto_gaze_frames
+vid=$SCRATCH/auto_gaze/raw_video/socref_21018_03_CV.MPG
+#30054.f.25.V2-.mov
+out_dir=$PI_HOME/auto_gaze_frames_emily
 
 mkdir -p $out_dir
 
