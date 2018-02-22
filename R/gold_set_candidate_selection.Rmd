@@ -14,10 +14,6 @@ library(tidyverse)
 theme_set(ggthemes::theme_few())
 ```
 
-```{r}
-set_here(path = ".", verbose = TRUE)
-```
-
 Sample 500 random samples
 ```{r}
 results <- read_csv(here("data/emily/results.csv"))
