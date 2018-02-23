@@ -16,20 +16,17 @@ library(tidyverse)
 theme_set(ggthemes::theme_few())
 ```
 
-```{r}
-set_here(path = ".", verbose = TRUE)
-```
-
 Read data
 
 ```{r}
-d <- read_csv(here("data/kyle/results.csv"))
+#d <- read_csv(here("data/kyle/results.csv"))
+d <- read_csv(here("data/kyle/gold_set_candidates.csv"))
 ```
 
 Select only gaze-relevant data.
 
 ```{r}
-d %<>% select(frame:gaze_1_z)
+d %<>% select(frame:pose_Rz)
 ```
 
 How long is the video?
@@ -85,3 +82,41 @@ y_dim <- d %>%
 plot_grid(x_dim, y_dim)
 ```
 
+## Analyze gold standard
+
+pose_Rx, pose_Ry, pose_Rz Rotation is in radians around X,Y,Z axes with the convention 
+
+$$ R = Rx * Ry * Rz $$ 
+
+This can be seen as pitch (Rx), yaw (Ry), and roll (Rz). The rotation is in world coordinates with camera being the origin.
+
+```{r}
+d %<>% rename(pitch = pose_Rx, yaw = pose_Ry, roll = pose_Rz)
+```
+
+```{r}
+d %>% 
+  filter(success == 1, !(gold_code %in% c("away", NA))) %>% 
+  ggplot(aes(x = frame, y = gaze_0_x, color = gold_code)) + 
+  geom_line(col = "darkgrey") + 
+  labs(title = "x-coordinates",
+       y = "Gaze Coordinate") + 
+  lims(y = c(x_min, x_max)) + 
+  geom_point(alpha = .7) +
+  coord_flip()
+```
+
+Plot x coordinates as a function of yaw
+
+```{r}
+d %>% 
+  filter(success == 1, !(gold_code %in% c("away", NA))) %>% 
+  ggplot(aes(x = gaze_0_x, y = yaw, color = gold_code)) + 
+  geom_point() 
+```
+
+Y as a function of roll: I predict no relationship
+
+```{r}
+GGally::ggpairs(d, columns = c("gaze_0_x", "gaze_0_y", "yaw", "pitch", "roll"))
+```
