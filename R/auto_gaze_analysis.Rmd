@@ -1,11 +1,10 @@
 ---
 title: "Auto-Gaze Analysis"
-date: "2/20/2018"
 output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = F, fig.width = 8, fig.asp = 0.63)
 ```
 
 ```{r}
@@ -97,9 +96,12 @@ d %<>% rename(pitch = pose_Rx, yaw = pose_Ry, roll = pose_Rz)
 
 ```{r}
 d %>% 
-  filter(success == 1, !(gold_code %in% c("away", NA))) %>% 
+  filter(success == 1, !(gold_code %in% c("away", NA, 'center'))) %>% 
+  filter(frame <= 6000, frame >= 5500) %>% 
   ggplot(aes(x = frame, y = gaze_0_x, color = gold_code)) + 
   geom_line(col = "darkgrey") + 
+  ggrepel::geom_text_repel(aes(label = frame), segment.color = "black",
+                 box.padding = unit(0.45, "lines")) +
   labs(title = "x-coordinates",
        y = "Gaze Coordinate") + 
   lims(y = c(x_min, x_max)) + 
@@ -197,11 +199,3 @@ Remove roll from the model
 m2 <- glm(gold_num ~ gaze_0_x * gaze_0_y * yaw * pitch, data = d_model)
 summary(m2)
 ```
-
-
-
-
-
-
-
-
