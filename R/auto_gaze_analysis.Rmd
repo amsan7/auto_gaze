@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
 library(cowplot)
 library(here)
 library(magrittr)
+library(GGally)
 library(tidyverse)
 theme_set(ggthemes::theme_few())
 ```
@@ -115,8 +116,92 @@ d %>%
   geom_point() 
 ```
 
-Y as a function of roll: I predict no relationship
+Plot pair-wise relationships between features.
 
 ```{r}
-GGally::ggpairs(d, columns = c("gaze_0_x", "gaze_0_y", "yaw", "pitch", "roll"))
+d %>% 
+  filter(success == 1, !(gold_code %in% c("away", NA))) %>% 
+  filter(gold_code %in% c("left", "right")) %>% 
+  ggpairs(data = ., aes(color = gold_code),
+          columns = c("gaze_0_x", "gaze_0_y", "yaw", "pitch", "roll"))
 ```
+
+## 3d vector plots
+
+```{r}
+library(plotly)
+
+d %>% 
+  filter(success == 1, !(gold_code %in% c("away", NA))) %>% 
+  plot_ly(data = ., x = ~gaze_0_x, y = ~gaze_0_y, z = ~gaze_0_z, color = ~gold_code) %>%
+  add_markers() %>%
+  layout(scene = list(xaxis = list(title = 'x_coordinate'),
+                     yaxis = list(title = 'y_coordinate'),
+                     zaxis = list(title = 'z_coordinate')))
+```
+
+```{r}
+d %>% 
+  filter(success == 1, !(gold_code %in% c("away", NA))) %>% 
+  plot_ly(data = ., x = ~gaze_0_x, y = ~gaze_0_y, z = ~yaw, color = ~gold_code) %>%
+  add_markers() %>%
+  layout(scene = list(xaxis = list(title = 'x_coordinate'),
+                     yaxis = list(title = 'y_coordinate'),
+                     zaxis = list(title = 'yaw')))
+```
+
+
+```{r}
+d %>% 
+  filter(success == 1, !(gold_code %in% c("away", NA)),
+         gold_code %in% c('left', 'right')) %>% 
+  plot_ly(data = ., x = ~gaze_0_x, y = ~yaw, z = ~pitch, color = ~gold_code) %>%
+  add_markers() %>%
+  layout(scene = list(xaxis = list(title = 'x_coordinate'),
+                     yaxis = list(title = 'yaw'),
+                     zaxis = list(title = 'pitch')))
+```
+
+## What features predict look category?
+
+```{r}
+d_model <- d %>% 
+  filter(success == 1, gold_code %in% c('left', 'right')) %>% 
+  mutate(gold_num = ifelse(gold_code == 'left', 1, 0))
+```
+
+
+Fit additive model.
+
+```{r}
+m_add <- glm(gold_num ~ gaze_0_x + gaze_0_y  + yaw  + pitch  + roll, data = d_model)
+summary(m_add)
+```
+
+Fit fully interactive model.
+
+```{r}
+m_int <- glm(gold_num ~ gaze_0_x * gaze_0_y * yaw * pitch * roll, data = d_model)
+summary(m_int)
+```
+
+Model comparison. 
+
+```{r}
+anova(m_add, m_int)
+```
+
+Remove roll from the model
+
+```{r}
+m2 <- glm(gold_num ~ gaze_0_x * gaze_0_y * yaw * pitch, data = d_model)
+summary(m2)
+```
+
+
+
+
+
+
+
+
