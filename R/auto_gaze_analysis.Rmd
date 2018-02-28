@@ -21,7 +21,7 @@ Read data
 
 ```{r}
 #d <- read_csv(here("data/kyle/results.csv"))
-d <- read_csv(here("data/kyle/gold_set_candidates.csv"))
+d <- read_csv(here("data/emily/gold_set_candidates.csv"))
 ```
 
 Select only gaze-relevant data.
