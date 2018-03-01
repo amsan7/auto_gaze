@@ -82,6 +82,13 @@ y_dim <- d %>%
 plot_grid(x_dim, y_dim)
 ```
 
+```{r}
+d %>% filter(success == 1) %>% 
+  ggplot(aes(x = frame, y= pose_Rx, color = gold_code)) + 
+  geom_point()
+```
+
+
 ## Analyze gold standard
 
 pose_Rx, pose_Ry, pose_Rz Rotation is in radians around X,Y,Z axes with the convention 
@@ -97,7 +104,7 @@ d %<>% rename(pitch = pose_Rx, yaw = pose_Ry, roll = pose_Rz)
 ```{r}
 d %>% 
   filter(success == 1, !(gold_code %in% c("away", NA, 'center'))) %>% 
-  filter(frame <= 6000, frame >= 5500) %>% 
+  #filter(frame <= 6000, frame >= 5500) %>% 
   ggplot(aes(x = frame, y = gaze_0_x, color = gold_code)) + 
   geom_line(col = "darkgrey") + 
   ggrepel::geom_text_repel(aes(label = frame), segment.color = "black",
@@ -108,6 +115,17 @@ d %>%
   geom_point(alpha = .7) +
   coord_flip()
 ```
+
+```{r}
+d %>% filter(success == 1, confidence >= 0.9) %>% ggplot(aes(x = gaze_0_y, color = gold_code)) + 
+  geom_line(stat = 'density', size = 1)
+```
+
+```{r}
+tmp <- d %>% filter(gaze_0_y > 0.1, gold_code == "no_look")
+```
+
+
 
 Plot x coordinates as a function of yaw
 
@@ -123,7 +141,6 @@ Plot pair-wise relationships between features.
 ```{r}
 d %>% 
   filter(success == 1, !(gold_code %in% c("away", NA))) %>% 
-  filter(gold_code %in% c("left", "right")) %>% 
   ggpairs(data = ., aes(color = gold_code),
           columns = c("gaze_0_x", "gaze_0_y", "yaw", "pitch", "roll"))
 ```
@@ -155,11 +172,10 @@ d %>%
 
 ```{r}
 d %>% 
-  filter(success == 1, !(gold_code %in% c("away", NA)),
-         gold_code %in% c('left', 'right')) %>% 
-  plot_ly(data = ., x = ~gaze_0_x, y = ~yaw, z = ~pitch, color = ~gold_code) %>%
+  filter(success == 1, !(gold_code %in% c("away", NA))) %>% 
+  plot_ly(data = ., x = ~roll, y = ~yaw, z = ~pitch, color = ~gold_code) %>%
   add_markers() %>%
-  layout(scene = list(xaxis = list(title = 'x_coordinate'),
+  layout(scene = list(xaxis = list(title = 'roll'),
                      yaxis = list(title = 'yaw'),
                      zaxis = list(title = 'pitch')))
 ```
@@ -168,10 +184,9 @@ d %>%
 
 ```{r}
 d_model <- d %>% 
-  filter(success == 1, gold_code %in% c('left', 'right')) %>% 
-  mutate(gold_num = ifelse(gold_code == 'left', 1, 0))
+  filter(success == 1) %>% 
+  mutate(gold_num = ifelse(gold_code == 'look', 1, 0))
 ```
-
 
 Fit additive model.
 
@@ -196,6 +211,6 @@ anova(m_add, m_int)
 Remove roll from the model
 
 ```{r}
-m2 <- glm(gold_num ~ gaze_0_x * gaze_0_y * yaw * pitch, data = d_model)
+m2 <- glm(gold_num ~ roll * yaw * pitch, data = d_model)
 summary(m2)
 ```
