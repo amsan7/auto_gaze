@@ -1,0 +1,138 @@
+---
+title: "Auto-Gaze build classifier"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = F, fig.width = 8, fig.asp = 0.63)
+```
+
+```{r}
+library(cowplot); library(here); library(magrittr)
+library(GGally); library(tidyverse)
+library(caret)
+theme_set(ggthemes::theme_few())
+set.seed(96)
+```
+
+Read data
+
+```{r}
+#d <- read_csv(here("data/kyle/results.csv"))
+d <- read_csv(here("data/emily/gold_set_candidates.csv"))
+d %<>% select(frame:pose_Rz) %>% filter(success == 1) 
+```
+
+## Preprocess the data
+
+```{r}
+d_model <- d %>% 
+  select(-frame, -timestamp, -success, -pose_Tx, pose_Ty, pose_Tz) %>% 
+  mutate(gold_code = as.factor(gold_code))
+```
+
+## Split the data
+
+```{r}
+# identify the indices of 10 80% subsamples of the data
+trainIndex <- createDataPartition(d_model$gold_code, p = .8, 
+                                  list = FALSE, 
+                                  times = 1)
+head(trainIndex)
+```
+
+```{r}
+train_data <- d_model[trainIndex, ]
+test_data <- d_model[-trainIndex, ]
+```
+
+Preprocess (center and scale) the predictor variables.
+
+```{r}
+preProcValues <- preProcess(select(d_model, -gold_code), method = c("center", "scale", "nzv"))
+trainTransformed <- predict(preProcValues, train_data)
+testTransformed <- predict(preProcValues, test_data)
+```
+
+## Fit model
+
+10-fold CV
+
+```{r}
+library(DMwR)
+fitControl <- trainControl(method = "repeatedcv",
+                           number = 10,
+                           repeats = 10,
+                           sampling = "smote")
+```
+
+Fit decision tree with stochastic gradient boosting. The hyperparameters include:
+
+* n.trees (# Boosting Iterations)
+* interaction.depth (Max Tree Depth)
+* shrinkage (Shrinkage)
+* n.minobsinnode (Min. Terminal Node Size)
+
+```{r}
+set.seed(825)
+gbmFit1 <- train(gold_code ~ ., 
+                 data = train_data, 
+                 method = "gbm", 
+                 trControl = fitControl,
+                 verbose = FALSE)
+gbmFit1
+```
+
+```{r}
+ggplot(gbmFit1, metric = "Kappa")
+```
+
+## Model tuning.
+
+```{r}
+gbmGrid <-  expand.grid(interaction.depth = c(1, 5, 9), 
+                        n.trees = (1:30)*50, 
+                        shrinkage = 0.1,
+                        n.minobsinnode = 20)
+                        
+nrow(gbmGrid)
+
+set.seed(825)
+gbmFit2 <- train(gold_code ~ ., 
+                 data = train_data, 
+                 method = "gbm", 
+                 trControl = fitControl, 
+                 verbose = FALSE, 
+                 tuneGrid = gbmGrid)
+gbmFit2
+```
+
+Plot kappa value. The Kappa Statistic compares the accuracy of the system to the accuracy of a random system. There is not a standardized interpretation of the kappa statistic. According to Wikipedia (citing their paper), Landis and Koch considers 0-0.20 as slight, 0.21-0.40 as fair, 0.41-0.60 as moderate, 0.61-0.80 as substantial, and 0.81-1 as almost perfect.
+
+```{r}
+ggplot(gbmFit2, metric = "Kappa")
+```
+
+```{r}
+ggplot(gbmFit2, metric = "Accuracy")
+```
+
+## Evaluate model
+
+```{r get preds}
+test_data$pred <- predict(gbmFit2, newdata = test_data)
+test_data %<>% mutate(correct_pred = ifelse(gold_code == pred, 1, 0))
+```
+
+```{r}
+test_data %>% pull(correct_pred) %>% mean() %>% round(3)
+```
+
+```{r}
+test_data %>% group_by(gold_code) %>% summarise(acc = mean(correct_pred) %>% round(3))
+```
+
+
+
+
+

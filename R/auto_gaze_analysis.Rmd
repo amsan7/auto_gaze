@@ -8,11 +8,8 @@ knitr::opts_chunk$set(echo = TRUE, warning = F, message = F, fig.width = 8, fig.
 ```
 
 ```{r}
-library(cowplot)
-library(here)
-library(magrittr)
-library(GGally)
-library(tidyverse)
+library(cowplot); library(here); library(magrittr)
+library(GGally); library(tidyverse)
 theme_set(ggthemes::theme_few())
 ```
 
