@@ -8,8 +8,7 @@ knitr::opts_chunk$set(echo = TRUE, warning = F, message = F, fig.width = 8, fig.
 ```
 
 ```{r}
-library(cowplot); library(here); library(magrittr)
-library(GGally); library(tidyverse)
+library(cowplot); library(here); library(magrittr); library(tidyverse)
 library(caret)
 theme_set(ggthemes::theme_few())
 set.seed(96)
@@ -17,16 +16,25 @@ set.seed(96)
 
 Read data
 
-```{r}
+```{r, eval = F}
 #d <- read_csv(here("data/kyle/results.csv"))
 d <- read_csv(here("data/emily/gold_set_candidates.csv"))
-d %<>% select(frame:pose_Rz) %>% filter(success == 1) 
+d_features <- read_csv(here("data/emily/socref_21018_03_3_18 CV.csv"))
+```
+
+Join gold code with new features and select just the gaze relevant features.
+
+```{r, eval = F}
+d %<>% 
+  select(frame, timestamp, gold_code) %>% 
+  left_join(., select(d_features, frame:gaze_angle_y, pose_Tx:pose_Rz))
 ```
 
 ## Preprocess the data
 
-```{r}
+```{r, eval = F}
 d_model <- d %>% 
+  filter(success == 1) %>% 
   select(-frame, -timestamp, -success, -pose_Tx, pose_Ty, pose_Tz) %>% 
   mutate(gold_code = as.factor(gold_code))
 ```
@@ -35,7 +43,7 @@ d_model <- d %>%
 
 ```{r}
 # identify the indices of 10 80% subsamples of the data
-trainIndex <- createDataPartition(d_model$gold_code, p = .8, 
+trainIndex <- createDataPartition(d_model$gold_code, p = .3, 
                                   list = FALSE, 
                                   times = 1)
 head(trainIndex)
@@ -73,33 +81,17 @@ Fit decision tree with stochastic gradient boosting. The hyperparameters include
 * shrinkage (Shrinkage)
 * n.minobsinnode (Min. Terminal Node Size)
 
-```{r}
-set.seed(825)
-gbmFit1 <- train(gold_code ~ ., 
-                 data = train_data, 
-                 method = "gbm", 
-                 trControl = fitControl,
-                 verbose = FALSE)
-gbmFit1
-```
-
-```{r}
-ggplot(gbmFit1, metric = "Kappa")
-```
-
 ## Model tuning.
 
 ```{r}
 gbmGrid <-  expand.grid(interaction.depth = c(1, 5, 9), 
-                        n.trees = (1:30)*50, 
+                        n.trees = c(50, 100, 150, 200, 250, 300), 
                         shrinkage = 0.1,
                         n.minobsinnode = 20)
-                        
-nrow(gbmGrid)
 
 set.seed(825)
 gbmFit2 <- train(gold_code ~ ., 
-                 data = train_data, 
+                 data = trainTransformed, 
                  method = "gbm", 
                  trControl = fitControl, 
                  verbose = FALSE, 
@@ -107,32 +99,54 @@ gbmFit2 <- train(gold_code ~ .,
 gbmFit2
 ```
 
-Plot kappa value. The Kappa Statistic compares the accuracy of the system to the accuracy of a random system. There is not a standardized interpretation of the kappa statistic. According to Wikipedia (citing their paper), Landis and Koch considers 0-0.20 as slight, 0.21-0.40 as fair, 0.41-0.60 as moderate, 0.61-0.80 as substantial, and 0.81-1 as almost perfect.
+Plot accuracy and kappa value. The Kappa Statistic compares the accuracy of the system to the accuracy of a random system. There is not a standardized interpretation of the kappa statistic. According to Wikipedia (citing their paper), Landis and Koch considers 0-0.20 as slight, 0.21-0.40 as fair, 0.41-0.60 as moderate, 0.61-0.80 as substantial, and 0.81-1 as almost perfect.
 
 ```{r}
-ggplot(gbmFit2, metric = "Kappa")
-```
-
-```{r}
-ggplot(gbmFit2, metric = "Accuracy")
+plot_grid(ggplot(gbmFit2, metric = "Kappa") + labs(title="kappa"), 
+          ggplot(gbmFit2, metric = "Accuracy") + labs(title="accuracy"))
 ```
 
 ## Evaluate model
 
+### Accuracy
+
 ```{r get preds}
-test_data$pred <- predict(gbmFit2, newdata = test_data)
-test_data %<>% mutate(correct_pred = ifelse(gold_code == pred, 1, 0))
+testTransformed$pred <- predict(gbmFit2, newdata = testTransformed)
+testTransformed %<>% mutate(correct_pred = ifelse(gold_code == pred, 1, 0))
+```
+
+How well did the model do 
+
+```{r}
+testTransformed %>% pull(correct_pred) %>% mean() %>% round(3)
 ```
 
 ```{r}
-test_data %>% pull(correct_pred) %>% mean() %>% round(3)
+testTransformed %>% 
+  group_by(gold_code) %>% 
+  summarise(n = n(),
+            acc = mean(correct_pred) %>% round(3))
+```
+
+### Precision and recall
+
+precision (also called positive predictive value) is the fraction of relevant instances among the retrieved instances, while recall (also known as sensitivity) is the fraction of relevant instances that have been retrieved over the total amount of relevant instances
+
+```{r}
+testTransformed %<>% 
+  mutate(output_type = case_when(
+    pred == "look" & gold_code == "look" ~ "true_positive",
+    pred == "look" & gold_code == "no_look" ~ "false_positive",
+    pred == "no_look" & gold_code == "no_look" ~ "true_negative",
+    pred == "no_look" & gold_code == "look" ~ "false_negative")
+    )
+
+results <- testTransformed %>% count(output_type) 
 ```
 
 ```{r}
-test_data %>% group_by(gold_code) %>% summarise(acc = mean(correct_pred) %>% round(3))
+paste0("precision is: ", round(results$n[4] / (results$n[2] + results$n[4]), 2))
+paste0("recall is: ", round(results$n[4] / (results$n[1] + results$n[4]), 2))
 ```
-
-
-
 
 
