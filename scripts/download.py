@@ -1,10 +1,11 @@
 import os
 import csv
 
-with open("../data/emily/gold_set_candidates.csv", 'rb') as img_paths_f:
+with open("../data/emily/ground_truth/sample_alessandro.csv", 'rb') as img_paths_f:
         img_paths = list(csv.reader(img_paths_f, delimiter=','))
 
 for path in img_paths[1:]:
-    os.system("mkdir -p ~/xsface/auto_gaze_sample_emily/")
-    os.system("scp sanchez7@sherlock.stanford.edu:/share/PI/mcfrank/auto_gaze_frames_emily%s ~/xsface/auto_gaze_sample_emily/" % (path[431]))
+    new_dir = "~/xsface/sample_alessandro/"
+    os.system("mkdir -p %s" % new_dir)
+    os.system("scp sanchez7@sherlock.stanford.edu:/share/PI/mcfrank/auto_gaze/auto_gaze_frames_emily%s %s" % (path[714], new_dir))
 

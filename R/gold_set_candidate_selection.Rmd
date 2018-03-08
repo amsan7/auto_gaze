@@ -14,6 +14,8 @@ library(tidyverse)
 theme_set(ggthemes::theme_few())
 ```
 
+# First Sample
+
 Sample 500 random samples
 ```{r}
 results <- read_csv(here("data/emily/results.csv"))
@@ -26,5 +28,35 @@ candidates <- results %>%
 Save tibble
 ```{r}
 write_csv(candidates, here("data/emily/gold_set_candidates.csv"))
+```
+
+# New Sample
+
+Load old sample and new data
+```{r}
+old_sample <- read_csv(here("data/emily/gold_set_candidates.csv"))
+new_data <- read_csv(here("data/emily/results2.csv"))
+```
+
+Filter between 1:14-2:14 & randomly select 
+```{r}
+new_sample <- new_data %>%
+  filter(between(frame, 2220, 4020)) %>%
+  anti_join(old_sample, by = "frame") %>%
+  sample_n(750) %>%
+  mutate(path=paste0("/image-", sprintf("%05d",frame), ".jpg")) %>%
+  arrange(frame)
+```
+
+Save tibbles
+```{r}
+write_csv(slice(new_sample, 1:250),
+          here("data/emily/ground_truth/sample_emily.csv"))
+
+write_csv(slice(new_sample, 251:500),
+          here("data/emily/ground_truth/sample_kyle.csv"))
+
+write_csv(slice(new_sample, 501:750),
+          here("data/emily/ground_truth/sample_alessandro.csv"))
 ```
 
