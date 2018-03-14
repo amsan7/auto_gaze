@@ -122,8 +122,6 @@ d %>% filter(success == 1, confidence >= 0.9) %>% ggplot(aes(x = gaze_0_y, color
 tmp <- d %>% filter(gaze_0_y > 0.1, gold_code == "no_look")
 ```
 
-
-
 Plot x coordinates as a function of yaw
 
 ```{r}
