@@ -1,0 +1,111 @@
+---
+title: "Auto-Gaze Data Processing"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T, warning = F, message = F, fig.width = 6, fig.asp = 0.63)
+```
+
+```{r}
+library(magrittr); library(tidyverse); library(here)
+data_path_read <- "data/soc_ref/ground_truth/01_raw"
+data_path_write <- "data/soc_ref/ground_truth/02_processed"
+features_path <- "data/soc_ref/open_face_output"
+```
+
+Read and merge separate gold code files using purrr map. 
+
+```{r}
+files <- list.files(here::here(data_path_read))
+
+# hacky way to separate the ground truth coding files from the timing data
+d <- files[1:4] %>% map_dfr(~ read_csv(file.path(here::here(data_path_read, .))))
+d_timing <- read_csv(here::here(data_path_read, files[5]))
+
+# read in open face model output
+d_features <- read_csv(here::here(features_path, "results_openFace_03_3_18.csv")) %>% 
+  select(frame:gaze_angle_y, pose_Tx:pose_Rz)
+```
+
+Join gold code with new features and select just the gaze relevant features.
+
+```{r}
+d %<>% 
+  select(frame, timestamp, gold_code) %>% 
+  left_join(., select(d_features, frame:gaze_angle_y, pose_Tx:pose_Rz))
+```
+
+### Add trial timing information to features.
+
+```{r}
+d_timing %<>% 
+  mutate(phase_onset_sec = phase_onset / 1000,
+         phase_offset_sec = phase_offset / 1000) %>% 
+  mutate_if(is.numeric, round, digits = 1)
+```
+
+Round the timestamp to make it easier to join the human coded timing information.
+
+```{r}
+d_features %<>% mutate(timestamp_rounded = round(timestamp, 1))
+```
+
+```{r}
+timing_human <- d_timing$phase_onset_sec %>% unique()
+timing_openface <- d_features$timestamp_rounded %>% unique()
+intersect(timing_human, timing_openface) 
+setdiff(timing_human, timing_openface) 
+```
+
+Create long version of trial timing information where we interpolate between the start and end of
+phase markers.
+
+```{r}
+# takes in a trial with information about the phase onset and offset
+# return the interpolated timing dataframe with a column for timestamps linked to phase information
+add_phase_timing <- function(df_trial, df_feats) {
+  start <- df_trial %>% pull(phase_onset_sec)
+  end <- df_trial %>% pull(phase_offset_sec)
+  
+  df_feats %>% 
+    filter(timestamp_rounded >= start, timestamp_rounded <= end) %>% 
+    select(timestamp)
+}
+```
+
+Some purrr::map magic to apply the add_phase_timing function to subsets of our dataset, i.e., each trial and phase. 
+
+```{r}
+d_timing_nested <- d_timing %>% 
+  group_by(trial, phase, num_looks, condition) %>% 
+  nest()
+
+d_timing_nested %<>% 
+  mutate(timing = map(data, .f = add_phase_timing, df_feats = d_features)) %>% 
+  unnest(timing) # pull out the timing information 
+
+## Join the trial timing and num looks information with gaze features
+d_features %<>% left_join(., d_timing_nested, by = "timestamp") 
+```
+
+Plot phase timing for a couple of trials to make sure things looks reasonable. 
+
+```{r}
+d_features %>% 
+  filter(!is.na(trial), str_detect(trial, pattern = "t")) %>% 
+  mutate(trial = str_extract(trial, pattern = "[[:digit:]]+") %>% as.numeric()) %>% 
+  ggplot(aes(x = timestamp, y = phase)) +
+  geom_line(size = 2) +
+  labs(x = "time (sec)") + 
+  facet_wrap(~trial, scales = "free_x") +
+  guides(color = F)
+```
+
+todo: check with emily to see if these timings look correct.
+
+### Write to disk
+
+```{r}
+write_csv(d_features, here::here(data_path_write, "ground_truth_processed_tidy.csv"))
+```

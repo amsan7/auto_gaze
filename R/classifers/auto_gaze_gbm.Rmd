@@ -12,23 +12,12 @@ library(cowplot); library(magrittr);
 library(tidyverse); library(caret); library(here)
 theme_set(ggthemes::theme_few())
 set.seed(96)
-data_path <- "data/emily/ground_truth"
+data_path <- "data/soc_ref/ground_truth/02_processed"
+features_path <- "data/soc_ref/open_face_output"
 ```
 
-Read and merge separate gold code files using purrr map. 
-
 ```{r}
-files <- list.files(here(data_path))
-d <- files %>% map_dfr(~ read_csv(file.path(here(data_path, .))))
-d_features <- read_csv(here("data/emily/results_openFace_03_3_18.csv"))
-```
-
-Join gold code with new features and select just the gaze relevant features.
-
-```{r}
-d %<>% 
-  select(frame, timestamp, gold_code) %>% 
-  left_join(., select(d_features, frame:gaze_angle_y, pose_Tx:pose_Rz))
+d <- read_csv(here::here(data_path, "ground_truth_processed_tidy.csv"))
 ```
 
 ## Preprocess the data
@@ -37,7 +26,7 @@ d %<>%
 d_model <- d %>% 
   filter(success == 1) %>% 
   select(-frame, -timestamp, -success, -pose_Tx, pose_Ty, pose_Tz) %>% 
-  mutate(gold_code = as.factor(gold_code))
+  mutate(gold_code = as.factor(gold_code)) 
 ```
 
 How many looks vs. no looks in the gold set?
@@ -55,7 +44,7 @@ d_model %>%
                       "pose_Rx", "pose_Ry", "pose_Ty"))
 ```
 
-Looks like gaze angle X and Y are perfectly correlated with gaze_X and gaze_Y. Generally, you want to remove attributes with an absolute correlation of 0.75 or higher.
+Looks like gaze angle X and Y are perfectly correlated with gaze_X and gaze_Y. Generally, we want to remove attributes with an absolute correlation of 0.75 or higher.
 
 ```{r}
 d_model %<>% select(-gaze_angle_x, -gaze_angle_y)
@@ -67,7 +56,7 @@ Into training and test sets.
 
 ```{r}
 # identify the indices of 10 80% subsamples of the data
-trainIndex <- createDataPartition(d_model$gold_code, p = .7, 
+trainIndex <- createDataPartition(d_model$gold_code, p = .8, 
                                   list = FALSE, 
                                   times = 1)
 head(trainIndex)
@@ -108,7 +97,7 @@ fitControl <- trainControl(method = "repeatedcv",
 
 ## Model tuning.
 
-#### Fit decision tree with stochastic gradient boosting. 
+### Fit decision tree with stochastic gradient boosting. 
 
 The hyperparameters include:
 
@@ -118,7 +107,7 @@ The hyperparameters include:
 * n.minobsinnode (Min. Terminal Node Size)
 
 ```{r}
-gbmGrid <-  expand.grid(interaction.depth = c(5, 9, 14, 20), 
+gbmGrid <-  expand.grid(interaction.depth = c(5, 9, 14), 
                         n.trees = c(200, 300, 400), 
                         shrinkage = 0.1,
                         n.minobsinnode = 20)
@@ -137,7 +126,7 @@ KM notes on GBM hyperparameters:
   * fitting with interaction.depth of 1 doesn't do well, so I dropped this option
   * you start to see diminishing returns on Kappa and Accuracy after 300 trees and interaction.depth 20
 
-#### Fit xgboost
+### Fit xgboost
 
 Hyperparamters include: nrounds, max_depth, eta, gamma, colsample_bytree, min_child_weight, subsample
 
@@ -264,9 +253,7 @@ paste0("f-score is: ", f_score)
 ## Predict on full dataset
 
 ```{r}
-d_features_preds <- d_features %>% 
-  select(frame:gaze_angle_y, pose_Tx:pose_Rz) %>% 
-  filter(success == 1) 
+d_features_preds <- d_features %>% filter(success == 1) 
 ```
 
 Tranform features.
