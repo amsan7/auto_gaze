@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = T, warning = F,
 ```{r}
 library(magrittr); library(tidyverse); library(here)
 data_path_read <- "data/soc_ref/ground_truth/01_raw"
-data_path_write <- "data/soc_ref/ground_truth/02_processed"
+data_path_write <- "data/soc_ref/ground_truth/02_tidy"
 features_path <- "data/soc_ref/open_face_output"
 theme_set(ggthemes::theme_few())
 ```
