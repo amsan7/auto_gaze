@@ -9,8 +9,8 @@ knitr::opts_chunk$set(echo = T, warning = F, message = F,
 ```
 
 ```{r}
-library(cowplot); library(magrittr); library(DMwR);
-library(tidyverse); library(caret); library(here)
+library(cowplot); library(magrittr); library(DMwR); library(stringr);
+library(tidyverse); library(caret); library(here); 
 set.seed(96)
 data_path <- "data/soc_ref/ground_truth/02_tidy"
 features_path <- "data/soc_ref/open_face_output"
@@ -100,7 +100,7 @@ fitControl <- trainControl(method = "repeatedcv",
                            summaryFunction = twoClassSummary)
 ```
 
-## Model tuning.
+## Model tuning
 
 ### Fit decision tree with stochastic gradient boosting. 
 
@@ -222,7 +222,7 @@ paste0("f-score is: ", f_score)
 ## Predict on the full dataset
 
 ```{r}
-d_features_preds <- d_features %>% filter(success == 1) 
+d_features_preds <- d %>% filter(success == 1) 
 ```
 
 Tranform features.
