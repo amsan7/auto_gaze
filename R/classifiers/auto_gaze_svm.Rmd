@@ -1,5 +1,5 @@
 ---
-title: "Auto Gaze XGboost"
+title: "Auto-Gaze SVM"
 output: html_document
 ---
 

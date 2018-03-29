@@ -4,7 +4,9 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = T, warning = F, message = F, fig.width = 6, fig.asp = 0.63)
+knitr::opts_chunk$set(echo = T, warning = F, 
+                      message = F, fig.width = 6, 
+                      fig.asp = 0.63)
 ```
 
 ```{r}
@@ -12,6 +14,7 @@ library(magrittr); library(tidyverse); library(here)
 data_path_read <- "data/soc_ref/ground_truth/01_raw"
 data_path_write <- "data/soc_ref/ground_truth/02_processed"
 features_path <- "data/soc_ref/open_face_output"
+theme_set(ggthemes::theme_few())
 ```
 
 Read and merge separate gold code files using purrr map. 
@@ -19,7 +22,7 @@ Read and merge separate gold code files using purrr map.
 ```{r}
 files <- list.files(here::here(data_path_read))
 
-# hacky way to separate the ground truth coding files from the timing data
+# indexing is a hacky way to separate the ground truth coding files from the timing df
 d <- files[1:4] %>% map_dfr(~ read_csv(file.path(here::here(data_path_read, .))))
 d_timing <- read_csv(here::here(data_path_read, files[5]))
 
@@ -31,9 +34,8 @@ d_features <- read_csv(here::here(features_path, "results_openFace_03_3_18.csv")
 Join gold code with new features and select just the gaze relevant features.
 
 ```{r}
-d %<>% 
-  select(frame, timestamp, gold_code) %>% 
-  left_join(., select(d_features, frame:gaze_angle_y, pose_Tx:pose_Rz))
+d_features %<>% left_join(., select(d, timestamp, gold_code), 
+                          by = c("timestamp"))
 ```
 
 ### Add trial timing information to features.
@@ -41,8 +43,7 @@ d %<>%
 ```{r}
 d_timing %<>% 
   mutate(phase_onset_sec = phase_onset / 1000,
-         phase_offset_sec = phase_offset / 1000) %>% 
-  mutate_if(is.numeric, round, digits = 1)
+         phase_offset_sec = phase_offset / 1000)
 ```
 
 Round the timestamp to make it easier to join the human coded timing information.
@@ -92,9 +93,11 @@ d_features %<>% left_join(., d_timing_nested, by = "timestamp")
 Plot phase timing for a couple of trials to make sure things looks reasonable. 
 
 ```{r}
-d_features %>% 
+d_features %<>% 
   filter(!is.na(trial), str_detect(trial, pattern = "t")) %>% 
-  mutate(trial = str_extract(trial, pattern = "[[:digit:]]+") %>% as.numeric()) %>% 
+  mutate(trial = str_extract(trial, pattern = "[[:digit:]]+") %>% as.numeric()) 
+  
+d_features %>% 
   ggplot(aes(x = timestamp, y = phase)) +
   geom_line(size = 2) +
   labs(x = "time (sec)") + 
