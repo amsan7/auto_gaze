@@ -80,10 +80,8 @@ testTransformed <- predict(preProcValues, test_data)
 See how many instances of each class we have in the training and test data.
 
 ```{r}
-# training
-table(trainTransformed$gold_code)
-# test
-table(testTransformed$gold_code)
+table(trainTransformed$gold_code) # training
+table(testTransformed$gold_code) # test
 ```
 
 ## Fit model
@@ -114,8 +112,8 @@ The hyperparameters include:
 [todo: say more about what the GBM is and what the different hyperparameters control]
 
 ```{r}
-gbmGrid <-  expand.grid(interaction.depth = c(5, 9, 14), 
-                        n.trees = c(200, 300, 400), 
+gbmGrid <-  expand.grid(interaction.depth = c(1, 5, 9), 
+                        n.trees = c(100, 200, 300), 
                         shrinkage = 0.1,
                         n.minobsinnode = 20)
 
@@ -131,6 +129,12 @@ gbmFit
 KM notes on GBM hyperparameters:
   * fitting with interaction.depth of 1 doesn't do well, so I dropped this option
   * you start to see diminishing returns on Kappa and Accuracy after 300 trees and interaction.depth 20
+
+Save model for future use.
+
+```{r}
+write_rds(gbmFit, here::here("R/classifiers/gbm_model.rds"))
+```
 
 ## Evaluate model performance
 
@@ -293,10 +297,42 @@ testTransformedPred %>%
   facet_wrap(~trial, scales = "free_x", nrow = 4)
 ```
 
+### Smooth the model predictions
+
 [todo: smooth out these looking functions by interpolating between shifts that have <= 5 frames (<200 ms) for a fixation]
 
 ```{r}
+test <- testTransformedPred %>% filter(trial == "t4")
+```
 
+```{r}
+test_vec <- test$pred %>% as.character()
+fix_length <- 5
+# takes a vector of looks
+# retuns a same length vector with short fixations removed (<5 frames)
+
+for(idx in 1:length(test_vec)) {
+  
+  curr_look <- test_vec[idx]
+  prev_look <- test_vec[idx - 1]
+  
+  if (curr_look != prev_look ) {
+    fixation_check_window <- test_vec[idx:idx + fix_length] 
+    
+    if (!(curr_look %in% fixation_check_window)) {
+      
+    }
+      
+  }
+}
+
+```
+
+```{r}
+good_look <- c("look", "look", "look", "look", "look", "look")
+bad_look <- c("look", "look", "no_look", "look", "look", "look")
+
+!("look" %in% good_look)
 ```
 
 ## Test whether the classifer can generalize 
