@@ -9,16 +9,23 @@ knitr::opts_chunk$set(echo = T, warning = F, message = F,
 ```
 
 ```{r}
-library(cowplot); library(magrittr); library(DMwR); library(stringr);
+library(cowplot); library(magrittr); library(DMwR); library(gbm);
 library(tidyverse); library(caret); library(here); 
+source(here::here("R/helpers/model_evals.R"))
+```
+
+```{r}
 set.seed(96)
 data_path <- "data/soc_ref/ground_truth/02_tidy"
 features_path <- "data/soc_ref/open_face_output"
 theme_set(ggthemes::theme_few())
 ```
 
+## Read data and pretrained model
+
 ```{r}
 d <- read_csv(here::here(data_path, "ground_truth_processed_tidy.csv"))
+gbmFit <- read_rds(here::here("R/classifiers/gbm_model.rds"))
 ```
 
 ## Preprocess the data
@@ -88,7 +95,7 @@ table(testTransformed$gold_code) # test
 
 10-fold cross validation. K-fold cross validation is... [todo: fill in a little background about the arguments to this function]
 
-```{r}
+```{r,eval = F}
 fitControl <- trainControl(method = "repeatedcv",
                            number = 10,
                            repeats = 10,
@@ -111,7 +118,7 @@ The hyperparameters include:
 
 [todo: say more about what the GBM is and what the different hyperparameters control]
 
-```{r}
+```{r, eval = F}
 gbmGrid <-  expand.grid(interaction.depth = c(1, 5, 9), 
                         n.trees = c(100, 200, 300), 
                         shrinkage = 0.1,
@@ -132,7 +139,7 @@ KM notes on GBM hyperparameters:
 
 Save model for future use.
 
-```{r}
+```{r, eval = F}
 write_rds(gbmFit, here::here("R/classifiers/gbm_model.rds"))
 ```
 
@@ -145,7 +152,7 @@ The Kappa Statistic compares the accuracy of the system to the accuracy of a ran
 ### Plot ROC
 
 ```{r}
-ggplot(gbmFit, metric = "ROC") + labs(title="ROC")
+ggplot(gbmFit, metric = "ROC") + labs(title="ROC") + theme_classic()
 ```
 
 ### Variable importance
@@ -153,7 +160,6 @@ ggplot(gbmFit, metric = "ROC") + labs(title="ROC")
 [todo: say more about what variable importance means]
 
 ```{r}
-library(gbm)
 gbmImp <- varImp(gbmFit, scale = FALSE)
 plot(gbmImp)
 ```
@@ -211,8 +217,6 @@ results <- testTransformed %>% count(output_type)
 Now, compute model performance.
 
 ```{r}
-source(here::here("R/helpers/model_evals.R"))
-
 precision <- compute_precision(true_positives = results$n[4], false_positives = results$n[2])
 paste0("precision is: ", precision)
 
@@ -235,10 +239,11 @@ Tranform features.
 preProcValuesPred <- preProcess(select(d_features_preds, -frame, -timestamp, 
                                        -gaze_angle_x, -gaze_angle_y), 
                                 method = c("center", "scale", "nzv"))
+
 testTransformedPred <- predict(preProcValuesPred, d_features_preds)
 ```
 
-Use GBM to generate predictions.
+Next, use the fitted GBM model to generate predictions.
 
 ```{r}
 testTransformedPred$pred <- predict(gbmFit, newdata = testTransformedPred)
@@ -280,14 +285,43 @@ testTransformedPred %>%
   geom_line()
 ```
 
-My sense is that counting number of looks is going to be noisy using this classifier. We might need to think about some kind of interpolation step after generating predictions. Or we could take the previous look into account as feature in the classifier. The only way I can think of is to use a RNN. 
+My sense is that counting number of looks with this classifier is going to be noisy. We might need to think about some kind of interpolation step after generating predictions. Or we could take the previous look into account as feature in the classifier. 
+
+We could do this using an RNN or just passing the previous frames gaze values as features. 
+
+### Smooth the model predictions
+
+```{r}
+test_preds_smoothed <- smooth_predictions(testTransformedPred, fixation_len = 10)
+```
+
+Visualize one trial before and after smoothing
+
+```{r}
+unsmoothed <- testTransformedPred %>% 
+  filter(frame >= 3189, frame <=3300) %>% 
+  ggplot(aes(x = frame, y = pred, group = 1)) +
+  geom_point(color = "darkorange") +
+  geom_line(color = "darkorange") +
+  ggthemes::theme_gdocs()
+
+smoothed <- test_preds_smoothed %>% 
+  filter(frame >= 3189, frame <=3300) %>% 
+  ggplot(aes(x = frame, y = smoothed_pred, group = 1)) +
+  geom_point(color = "darkorange") +
+  geom_line(color = "darkorange") +
+  ggthemes::theme_gdocs()
+
+cowplot::plot_grid(unsmoothed, smoothed) 
+```
+
 
 ### Compute proportion looking for each trial/condition
 
 The goal is to see if we can reproduce the results from Emily's paper based on number of looks with a proportion looking measure generated via the ML pipeline. 
 
 ```{r}
-testTransformedPred %>% 
+a <- testTransformedPred %>% 
   filter(!is.na(phase), 
          str_detect(trial, pattern = "t")) %>% 
   mutate(trial = str_extract(trial, pattern = "[[:digit:]]+") %>% as.numeric()) %>% 
@@ -295,47 +329,82 @@ testTransformedPred %>%
   geom_point() +
   geom_line() +
   facet_wrap(~trial, scales = "free_x", nrow = 4)
+
+b <- test_preds_smoothed %>% 
+  filter(!is.na(phase), 
+         str_detect(trial, pattern = "t")) %>% 
+  mutate(trial = str_extract(trial, pattern = "[[:digit:]]+") %>% as.numeric()) %>% 
+  #filter(trial == 9) %>% 
+  ggplot(aes(x = frame, y = smoothed_pred, group = 1, color = phase)) +
+  geom_point() +
+  geom_line() +
+  facet_wrap(~trial, scales = "free_x", nrow = 4) +
+  theme_minimal()
+
+cowplot::plot_grid(a, b)
 ```
 
-### Smooth the model predictions
+### Accuracy
 
-[todo: smooth out these looking functions by interpolating between shifts that have <= 5 frames (<200 ms) for a fixation]
+Get predictions from model on held out test set.
+
+```{r get preds}
+smoothed_scoring <- test_preds_smoothed %>% 
+  filter(!is.na(gold_code)) %>% 
+  mutate(correct_pred = ifelse(gold_code == smoothed_pred, 1, 0))
+```
+
+Compute some stats to see how well did. First, accuracy overall:
 
 ```{r}
-test <- testTransformedPred %>% filter(trial == "t4")
+smoothed_scoring %>% pull(correct_pred) %>% mean() %>% round(3)
 ```
+
+Accuracy within each class:
 
 ```{r}
-test_vec <- test$pred %>% as.character()
-fix_length <- 5
-# takes a vector of looks
-# retuns a same length vector with short fixations removed (<5 frames)
-
-for(idx in 1:length(test_vec)) {
-  
-  curr_look <- test_vec[idx]
-  prev_look <- test_vec[idx - 1]
-  
-  if (curr_look != prev_look ) {
-    fixation_check_window <- test_vec[idx:idx + fix_length] 
-    
-    if (!(curr_look %in% fixation_check_window)) {
-      
-    }
-      
-  }
-}
-
+smoothed_scoring %>% 
+  group_by(gold_code) %>% 
+  summarise(n = n(),
+            acc = mean(correct_pred) %>% round(3))
 ```
+
+### Precision and recall
+
+* Precision (also called positive predictive value) is the fraction of relevant instances among the retrieved instances. 
+
+* Recall (also known as sensitivity) is the fraction of relevant instances that have been retrieved over the total amount of relevant instances
 
 ```{r}
-good_look <- c("look", "look", "look", "look", "look", "look")
-bad_look <- c("look", "look", "no_look", "look", "look", "look")
+smoothed_scoring %<>% 
+  mutate(output_type = case_when(
+    smoothed_pred == "look" & gold_code == "look" ~ "true_positive",
+    smoothed_pred == "look" & gold_code == "no_look" ~ "false_positive",
+    smoothed_pred == "no_look" & gold_code == "no_look" ~ "true_negative",
+    smoothed_pred == "no_look" & gold_code == "look" ~ "false_negative")
+    )
 
-!("look" %in% good_look)
+results_smoothed <- smoothed_scoring %>% count(output_type) 
 ```
 
-## Test whether the classifer can generalize 
+Now, compute model performance.
+
+```{r}
+precision <- compute_precision(true_positives = results_smoothed$n[4], 
+                               false_positives = results_smoothed$n[2])
+
+paste0("precision is: ", precision)
+
+recall <- compute_recall(true_positives = results_smoothed$n[4], 
+                         false_negatives = results_smoothed$n[1])
+
+paste0("recall is: ", recall)
+
+f_score <- compute_f(precision, recall)
+paste0("f-score is: ", f_score)
+```
+
+## Does the classifer generalize?
 
 Can we use the model to predict looking for a new participant that the model has never seen before? 
 
