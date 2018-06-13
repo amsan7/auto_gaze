@@ -93,13 +93,13 @@ table(testTransformed$gold_code) # test
 
 ## Fit model
 
-10-fold cross validation. K-fold cross validation is... [todo: fill in a little background about the arguments to this function]
+10-fold cross validation. K-fold cross validation is a method for estimating a tuning parameter λ (such as subset size): Divides the data into K roughly equal parts; for each k = 1, 2, . . . K, fit the model with parameter λ to the other K − 1 parts, and compute its error in predicting the kth part; do this for many values of λ and choose the value of λ that makes CV error smallest. K = 5 or 10 is typical.
 
-```{r,eval = F}
-fitControl <- trainControl(method = "repeatedcv",
-                           number = 10,
-                           repeats = 10,
-                           sampling = "smote",
+```{r}
+fitControl <- trainControl(method = "repeatedcv", #k-fold cross validation
+                           number = 10, #k (number of folds) = 10
+                           repeats = 10, # 10 separate k-fold cross-validations are performed
+                           sampling = "smote", #synthetic minority oversampling technique; over-sample sparse class
                            savePredictions = T,
                            classProbs = T,
                            summaryFunction = twoClassSummary)
@@ -314,7 +314,6 @@ smoothed <- test_preds_smoothed %>%
 
 cowplot::plot_grid(unsmoothed, smoothed) 
 ```
-
 
 ### Compute proportion looking for each trial/condition
 
